@@ -1,14 +1,17 @@
 from fastapi import APIRouter, HTTPException, status
-
-from app.models import  WebHook
-
-
+from app.models import WebHook
 from app.tasks.bill_task import process_bill_task
+from kombu.exceptions import OperationalError  # error típico de broker
 
 router = APIRouter()
 
-@router.post("/webhook")
-async def webhook_to_quickbooks(data: WebHook.WebHook, status_code= status.HTTP_200_OK):
-  bill_id = data.id
-  process_bill_task.delay(bill_id)
-  return {"message": "Webhook received"}
+@router.post("/webhook", status_code=status.HTTP_202_ACCEPTED)
+async def webhook_to_quickbooks(data: WebHook.WebHook):
+    bill_id = data.id
+    try:
+        process_bill_task.delay(bill_id)
+    except OperationalError as e:
+        # Service unavailable Celery error
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail={"message": "Queue unavailable", "error": str(e)})
+    return {"message": "Webhook received", "bill_id": bill_id, "status": "queued"}

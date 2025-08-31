@@ -1,13 +1,21 @@
-from fastapi import HTTPException
 from app.core.celery_worker import celery
 from app.services.bill_service import bill_service
+from app.core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
 
-@celery.task(bind=True, max_retries=3)
-def process_bill_task(self, bill_id: str):
+@celery.task(bind=True, max_retries=3, default_retry_delay=180)
+def process_bill_task(self, bill_id: str, company_id: str | None = None):
     import asyncio
     try:
-        # Run the async function in a new event loop
-        asyncio.run(bill_service(bill_id))
+        asyncio.run(bill_service(bill_id, company_id))
+    except (BusinessValidationError, NotFoundDomainError) as e:
+        # 4xx / no-retry: let fail clean (will be logged by the service)
+        print(f"[Non-retryable] bill_id={bill_id} err={e}")
+        raise
+    except RetryableSystemError as e:
+        # Temporary errors: yes retry
+        print(f"[Retryable] bill_id={bill_id} err={e}")
+        raise self.retry(exc=e)
     except Exception as e:
-        print(f"Error processing bill {bill_id}: {e}")
-        self.retry(exc=e)
+        # Unknowns: treat as retryable once (would improve with type classification)
+        print(f"[Retryable-unknown] bill_id={bill_id} err={e}")
+        raise self.retry(exc=e)

@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from quickbooks.objects.vendor import Vendor
@@ -8,13 +7,17 @@ from quickbooks.objects.account import Account
 from quickbooks.objects.department import Department
 
 from app.database.models.QuickBooksToken import QboConnection
+from app.core.exceptions import BusinessValidationError, NotFoundDomainError
 
+
+# Get the default company ID from the database
 def _get_default_company_id(db: Session) -> str:
     row = db.query(QboConnection).first()
     if not row:
-        raise HTTPException(status_code=400, detail="QuickBooks is not connected yet. Go to /qbo/connect")
-    return row.company_id
-  
+        raise BusinessValidationError("No QuickBooks connection found in the system.")
+    return row.realm_id
+
+# Escape QuickBooks special characters in strings
 def _escape_qb(value: str) -> str:
     if isinstance(value, str):
         return value.replace("'", "''") if value else value
@@ -23,7 +26,7 @@ def _escape_qb(value: str) -> str:
 def _get_vendor(qb, vendor_id: str) -> Vendor:
     res = Vendor.where(f"Id = '{_escape_qb(vendor_id)}'", qb=qb)
     if not res:
-        raise HTTPException(status_code=404, detail=f"Vendor (Hauler) '{vendor_id}' not found in QuickBooks.")
+      raise NotFoundDomainError(f"Vendor (Hauler) '{vendor_id}' not found in QuickBooks.")  
     return res[0]
 
 
@@ -35,7 +38,7 @@ def _get_customer_by_display_name(qb, display_name: str):
   query = f"DisplayName LIKE '%{_escape_qb(search_term)}%'"
   customers = Customer.where(query, qb=qb)
   if not customers:
-      raise HTTPException(status_code=404, detail=f"Customer with display name {display_name} not found.")
+      raise NotFoundDomainError(f"Customer with display name {display_name} not found.")
   return customers[0]
 
 def get_department_from_service_account(qb, service_account_id: str) -> Department:
@@ -44,5 +47,5 @@ def get_department_from_service_account(qb, service_account_id: str) -> Departme
   #before the comma and the space
   departments = Department.where(f"Name LIKE '%{_escape_qb(service_account_id)}%'", qb=qb)
   if not departments:
-      print(f"No department found for service account {service_account_id}")
+      raise NotFoundDomainError(f"No department found for service account {service_account_id}")
   return departments[0]

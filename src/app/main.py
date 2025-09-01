@@ -38,6 +38,8 @@ async def root():
     "status": "running"
   })
 
+app.include_router(router)
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))

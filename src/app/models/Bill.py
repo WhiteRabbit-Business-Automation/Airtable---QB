@@ -1,5 +1,5 @@
 from pyairtable.orm import Model, fields as F
-from app.core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
+from ..core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
 
 class Bill(Model):
   bill_number = F.TextField("Bill #")

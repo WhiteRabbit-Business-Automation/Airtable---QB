@@ -4,10 +4,10 @@ from intuitlib.enums import Scopes
 from sqlalchemy.orm import Session
 import datetime as dt
 
-from app.shared.quickbooks import get_auth_client, now_utc
-from app.shared.database import get_db
-from app.database.crud_qbo import upsert_tokens
-from app.core.config import QUICKBOOKS_ENV
+from ...shared.quickbooks import get_auth_client, now_utc
+from ...shared.database import get_db
+from ...database.crud_qbo import upsert_tokens
+from ...core.config import QUICKBOOKS_ENV
 
 router = APIRouter()
 

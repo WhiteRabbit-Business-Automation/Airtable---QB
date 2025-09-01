@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, DateTime, UniqueConstraint, func
-from app.database.engine import Base
+from ..engine import Base
 
 class QboConnection(Base):
     __tablename__ = "qbo_connections"

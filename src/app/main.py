@@ -8,8 +8,8 @@ from .api.routes.bills import router as router_bills
 from .api.routes.qbo import router as router_quickbooks
 from .core.config import APP_NAME, APP_VERSION
 
-from app.database.engine import Base, engine
-from app.database import models
+from .database.engine import Base, engine
+from .database import models
 
 
 Base.metadata.create_all(bind=engine)

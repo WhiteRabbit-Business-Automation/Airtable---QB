@@ -6,8 +6,8 @@ from quickbooks.objects.customer import Customer
 from quickbooks.objects.account import Account
 from quickbooks.objects.department import Department
 
-from app.database.models.QuickBooksToken import QboConnection
-from app.core.exceptions import BusinessValidationError, NotFoundDomainError
+from ..database.models.QuickBooksToken import QboConnection
+from ..core.exceptions import BusinessValidationError, NotFoundDomainError
 
 
 # Get the default company ID from the database

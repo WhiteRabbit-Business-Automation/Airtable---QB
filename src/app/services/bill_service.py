@@ -2,13 +2,13 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from quickbooks.objects.bill import Bill as QbBill
 from quickbooks.objects import Account
-from app.models.Bill import Bill as BillModel
-from app.schemas.Bill import BillBase as BillSchema, BillStatus
-from app.shared.quickbooks import get_qbo_client
-from app.utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT
-from app.utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account
-from app.database.engine import SessionLocal
-from app.core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
+from ..models.Bill import Bill as BillModel
+from ..schemas.Bill import BillBase as BillSchema, BillStatus
+from ..shared.quickbooks import get_qbo_client
+from ..utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT
+from ..utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account
+from ..database.engine import SessionLocal
+from ..core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
 
 async def bill_service(bill_id: str, company_id: str | None = None):
     db: Session | None = None

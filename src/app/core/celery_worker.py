@@ -25,7 +25,7 @@ celery.conf.update(
 
 # Import tasks to register them with Celery
 try:
-    from app.tasks import bill_task
+    from ..tasks import bill_task
 except ImportError:
     # If direct import fails, try with the full path
     from src.app.tasks import bill_task

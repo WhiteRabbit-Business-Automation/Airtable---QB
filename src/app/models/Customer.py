@@ -1,6 +1,6 @@
 from pyairtable.orm import Model, fields as F
 
-from app.core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
+from ..core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
 
 class Customer(Model):
   sf_name = F.TextField("SF Customer Name")

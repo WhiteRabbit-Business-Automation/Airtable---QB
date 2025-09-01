@@ -8,7 +8,7 @@ class Hauler(Model):
   email = F.EmailField("Email")
   phone = F.PhoneNumberField("Phone #")
   terms_days = F.NumberField("Terms (days)")
-  customers = F.LinkField[str]("Customers 🔎", "Customer.Customer")
+  customers = F.LinkField[str]("Customers 🔎", "app.models.Customer.Customer")
   number_customers = F.CountField("# Customers 🔎")
   name_lower_case = F.TextField("Name Lower case", readonly=True)
   hauler_ai_instruction = F.MultilineTextField("Hauler AI Instruction", readonly=True)

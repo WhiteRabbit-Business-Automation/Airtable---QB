@@ -13,8 +13,8 @@ if str(project_root) not in sys.path:
 # Configuración del worker de Celery
 celery = Celery(
     'worker',
-    broker=os.getenv('REDIS_BROKER', 'redis://localhost:6379/0'),  # Cambia el URL según tu entorno
-    backend=os.getenv('REDIS_BACKEND', 'redis://localhost:6379/0'),
+    broker=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),  # Railway uses REDIS_URL
+    backend=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
 )
 
 celery.conf.update(
@@ -25,7 +25,7 @@ celery.conf.update(
 
 # Import tasks to register them with Celery
 try:
-    from app.tasks import bill_task
+    from ..tasks import bill_task
 except ImportError:
     # If direct import fails, try with the full path
     from src.app.tasks import bill_task

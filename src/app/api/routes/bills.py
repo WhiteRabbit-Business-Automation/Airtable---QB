@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
-from app.models import WebHook
-from app.tasks.bill_task import process_bill_task
+from ...models import WebHook
+from ...tasks.bill_task import process_bill_task
 from kombu.exceptions import OperationalError  # error típico de broker
 
 router = APIRouter()

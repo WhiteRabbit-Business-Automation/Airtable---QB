@@ -1,5 +1,5 @@
 from pyairtable.orm import Model, fields as F
-from app.core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
+from ..core.config import AIRTABLE_TOKEN, AIRTABLE_BASE_ID
 
 class Bill(Model):
   bill_number = F.TextField("Bill #")
@@ -21,7 +21,7 @@ class Bill(Model):
   price = F.LookupField[float]("Price 🔎")
   hauler = F.SingleLinkField("Hauler 🔎", "app.models.Hauler.Hauler")
   service_account = F.LookupField[str]("Service Account 🔎")  
-  line_items = F.LinkField[str]("Line Items", "LineItem.LineItem")
+  line_items = F.LinkField[str]("Line Items", "app.models.LineItem.LineItem")
   invoice_month = F.DatetimeField("Invoice Month")
   terms = F.NumberField("Terms")
   issue_status = F.SelectField("Issue Status")

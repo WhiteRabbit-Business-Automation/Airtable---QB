@@ -3,14 +3,14 @@ from sqlalchemy.orm import Session
 from intuitlib.client import AuthClient
 from quickbooks import QuickBooks
 
-from app.core.config import (
+from ..core.config import (
     QUICKBOOKS_CLIENT_ID,
     QUICKBOOKS_CLIENT_SECRET,
     QUICKBOOKS_REDIRECT_URI,
     QUICKBOOKS_ENV,
 )
-from app.database.crud_qbo import get_decrypted_tokens, upsert_tokens
-from app.core.exceptions import BusinessValidationError
+from ..database.crud_qbo import get_decrypted_tokens, upsert_tokens
+from ..core.exceptions import BusinessValidationError
 
 TOKEN_SAFETY_WINDOW_SECONDS = 5 * 60  # refresh 5 minutes before expiry
 UTC = dt.timezone.utc # all times in UTC

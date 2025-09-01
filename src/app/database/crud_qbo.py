@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.database.models.QuickBooksToken import QboConnection
-from app.security.fernet import encrypt, decrypt
+from .models.QuickBooksToken import QboConnection
+from ..security.fernet import encrypt, decrypt
 
 def get_connection_by_realm(db: Session, realm_id: str) -> Optional[QboConnection]:
     return db.query(QboConnection).filter_by(realm_id=realm_id).first()

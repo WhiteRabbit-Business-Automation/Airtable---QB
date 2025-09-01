@@ -29,3 +29,11 @@ try:
 except ImportError:
     # If direct import fails, try with the full path
     from src.app.tasks import bill_task
+
+# When saving tokens - they get encrypted
+obj.access_token = encrypt(access_token)
+obj.refresh_token = encrypt(refresh_token)
+
+# When reading tokens - they get decrypted  
+"access_token": decrypt(obj.access_token) if obj.access_token else None,
+"refresh_token": decrypt(obj.refresh_token) if obj.refresh_token else None,

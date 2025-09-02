@@ -7,8 +7,10 @@ from ..schemas.Bill import BillBase as BillSchema, BillStatus
 from ..shared.quickbooks import get_qbo_client
 from ..utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT
 from ..utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account
+from ..utils.qb_terms import TERMS_ID_ON_QB, DEFAULT_TERM_ID
 from ..database.engine import SessionLocal
 from ..core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
+
 
 async def bill_service(bill_id: str, company_id: str | None = None):
     db: Session | None = None
@@ -20,6 +22,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         # 1) Get bill
         try:
             bill = BillModel.from_id(bill_id)
+            print(f"Processing bill {bill.bill_number} with status {bill.status}")
         except Exception as e:
             raise NotFoundDomainError(f"Bill with id {bill_id} not found: {e}")
 
@@ -36,23 +39,32 @@ async def bill_service(bill_id: str, company_id: str | None = None):
             total_amount=bill.bill_amount,
             customer_account=bill.customer.account_number,
             service_account=bill.service_account[0] if bill.service_account else "",
+            service_name=bill.service.name if bill.service else "",
+            sales_term= bill.service.hauler_terms[0] if bill.service and bill.service.hauler_terms else 0,
         )
+        
+        print(f"Bill schema: {bill_schema}")
 
         # 3) Get QBO client
         if not company_id:
             company_id = _get_default_company_id(db)
         qb = get_qbo_client(realm_id=company_id, db=db)
+        
+        print(f"QBO client obtained for company_id {company_id}")
 
         # 4) Business validations
         if not bill_schema.hauler_id:
             raise BusinessValidationError("Bill does not have a Hauler associated")
         hauler = _get_vendor(qb, bill_schema.hauler_id)
+        
+        print(f"Hauler (Vendor) found: {hauler.DisplayName}")
 
         if not bill_schema.customer_account:
             raise BusinessValidationError("Bill does not have a Customer associated")
         customer = _get_customer_by_display_name(qb, bill_schema.customer_account)
         
-
+        print(f"Customer found: {customer.DisplayName}")
+        
         # 5) Get expense account
         expense_account_id = SERVICE_TYPE_TO_QB_ACCOUNT.get(bill_schema.service_type) or DEFAULT_EXPENSE_ACCOUNT_ID
         if not expense_account_id:
@@ -60,6 +72,8 @@ async def bill_service(bill_id: str, company_id: str | None = None):
                 f"No QuickBooks account mapping found for service type '{bill_schema.service_type}'",
                 payload={"service_type": bill_schema.service_type},
             )
+            
+        print(f"Using expense account ID: {expense_account_id} for service type: {bill_schema.service_type}")
 
         
         expense_account = Account.get(expense_account_id, qb=qb)
@@ -69,6 +83,9 @@ async def bill_service(bill_id: str, company_id: str | None = None):
                 payload={"account_id": expense_account_id},
             )
 
+        print(f"Expense account found: {expense_account.Name}")
+        #Comment on development
+        #Location
         location = get_department_from_service_account(qb, bill_schema.service_account)
         if not location:
             raise BusinessValidationError(
@@ -76,30 +93,27 @@ async def bill_service(bill_id: str, company_id: str | None = None):
                 payload={"service_account": bill_schema.service_account},
             )
         
+        #terms
+        term = TERMS_ID_ON_QB.get(bill_schema.sales_term)
+        if not term:
+            term = DEFAULT_TERM_ID
+        
 
         # 6) Get QBO bill
         qbo_bill = QbBill()
         qbo_bill.DocNumber = bill_schema.bill_number
         qbo_bill.VendorRef = {"value": hauler.Id}
-        # Asegura formato YYYY-MM-DD (por si bill_date es datetime)
-        qbo_bill.TxnDate = bill_schema.bill_date.strftime("%Y-%m-%d")
+        qbo_bill.TxnDate = bill_schema.bill_date.strftime("%Y-%m-%d") # Ensures format YYYY-MM-DD (in case that bill_date is datetime)
         qbo_bill.DueDate = bill_schema.due.strftime("%Y-%m-%d")
         qbo_bill.PrivateNote = f"{bill_schema.pdf_link}"
-        qbo_bill.DepartmentRef = {"value": location.Id}
-
-        # Description : Convert BillAddr to human-readable string
-        desc = getattr(customer, "DisplayName", "") or ""
-        addr = getattr(customer, "BillAddr", None)
-        if addr:
-            parts = [getattr(addr, "Line1", None), getattr(addr, "City", None), getattr(addr, "CountrySubDivisionCode", None)]
-            as_text = ", ".join([p for p in parts if p])
-            if as_text:
-                desc = as_text
+        qbo_bill.DepartmentRef = {"value": location.Id} # Comment on dev
+        
+        qbo_bill.SalesTermRef = {"value": term}
 
         qbo_bill.Line = [{
             "DetailType": "AccountBasedExpenseLineDetail",
             "Amount": float(bill_schema.total_amount),
-            "Description": desc,
+            "Description": bill_schema.service_name, # Service name
             "AccountBasedExpenseLineDetail": {
                 "AccountRef": {"value": expense_account.Id, "name": expense_account.Name},
                 "CustomerRef": {"value": customer.Id}
@@ -109,6 +123,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         # 7) Save to QBO
         try:
             qbo_bill.save(qb=qb)
+            print(f"Bill {bill.bill_number} created in QBO with Id {qbo_bill.Id}")
         except Exception as e:
             msg = str(e)
             # simple heuristic

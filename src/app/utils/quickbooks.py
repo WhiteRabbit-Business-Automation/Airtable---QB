@@ -5,6 +5,7 @@ from quickbooks.objects.account import Account
 from quickbooks.objects.customer import Customer
 from quickbooks.objects.account import Account
 from quickbooks.objects.department import Department
+from quickbooks.objects.term import Term
 
 from ..database.models.QuickBooksToken import QboConnection
 from ..core.exceptions import BusinessValidationError, NotFoundDomainError
@@ -49,3 +50,4 @@ def get_department_from_service_account(qb, service_account_id: str) -> Departme
   if not departments:
       raise NotFoundDomainError(f"No department found for service account {service_account_id}")
   return departments[0]
+

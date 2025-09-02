@@ -35,8 +35,10 @@ class BillBase(BaseModel):
   account_number: Annotated[str, StringConstraints(min_length=1, max_length=50)]  
   service_account: Annotated[str, StringConstraints(min_length=1, max_length=50)]
   service_type: Annotated[ServiceType, StringConstraints(min_length=1, max_length=50)]
+  service_name: Annotated[str, StringConstraints(min_length=1, max_length=250)]
   total_amount : Annotated[Decimal, conint(gt=0)]
   customer_account: Annotated[str, StringConstraints(min_length=1, max_length=50)]
+  sales_term: Annotated[int, StrictInt]
 
 
   #Due date comes with mm/dd/yyyy format instead of dd/mm/yyyy

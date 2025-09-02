@@ -1,3 +1,4 @@
+#PROD
 SERVICE_TYPE_TO_QB_ACCOUNT = {
     "Trash": "122",  # Trash Removal (Exp.):Trash (Exp.) [COGS]
     "Roll off (move to tempo or monthly)": "142",  # Rolloff (Exp.) [COGS]
@@ -10,3 +11,16 @@ SERVICE_TYPE_TO_QB_ACCOUNT = {
 
 # Fallback de seguridad por si falta mapeo o la cuenta está inválida
 DEFAULT_EXPENSE_ACCOUNT_ID = "47"  # Ask My Accountant (Other Expense)
+
+# #DEV
+# SERVICE_TYPE_TO_QB_ACCOUNT = {
+#     "Trash": "1150040001",
+#     "Roll off (move to tempo or monthly)": "1150040001",
+#     "Roll off - Monthly": "1150040001",
+#     "Roll off - Temp": "1150040001",
+#     "Compactor": "1150040001",
+#     "Recycling": "1150040001",
+#     "Misc": "14",  # Miscellaneous
+# }
+# # Fallback de seguridad por si falta mapeo o la cuenta está inválida
+# DEFAULT_EXPENSE_ACCOUNT_ID = "1150040001"  # Ask My Accountant (Other Expense)

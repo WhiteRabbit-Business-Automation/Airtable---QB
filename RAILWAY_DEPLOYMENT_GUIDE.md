@@ -23,6 +23,7 @@ This guide documents the complete deployment process for deploying the QuickBook
 ## Prerequisites Identified
 
 During deployment, we identified these critical requirements:
+
 - Python 3.12+ runtime
 - PostgreSQL database driver (`psycopg2-binary`)
 - Redis for Celery message broker
@@ -34,6 +35,7 @@ During deployment, we identified these critical requirements:
 ### 1. Repository Structure Analysis
 
 The project follows this structure:
+
 ```
 create-qb-record-from-airtable/
 ├── src/app/
@@ -56,6 +58,7 @@ create-qb-record-from-airtable/
 **Issue**: The application used absolute imports (`from app.models`) that failed in Railway's environment.
 
 **Solution**: Converted all imports to relative imports:
+
 ```python
 # Before (❌)
 from app.models.Bill import Bill
@@ -67,6 +70,7 @@ from ..shared.quickbooks import get_qbo_client
 ```
 
 **Files Modified**:
+
 - `src/app/main.py`
 - `src/app/api/routes/bills.py`
 - `src/app/api/routes/qbo.py`
@@ -84,6 +88,7 @@ from ..shared.quickbooks import get_qbo_client
 **Issue**: SQLite-specific connection arguments caused PostgreSQL connection failures.
 
 **Solution**: Made database connection arguments conditional:
+
 ```python
 # Before (❌)
 engine = create_engine(
@@ -101,6 +106,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args)
 **Issue**: `ModuleNotFoundError: No module named 'psycopg2'`
 
 **Solution**: Added PostgreSQL driver to `requirements.txt`:
+
 ```txt
 psycopg2-binary==2.9.9
 ```
@@ -110,6 +116,7 @@ psycopg2-binary==2.9.9
 **Issue**: PyAirtable ORM couldn't resolve short model references like `"Hauler"`.
 
 **Solution**: Updated all model cross-references to use full module paths:
+
 ```python
 # Before (❌)
 hauler = F.SingleLinkField("Hauler 🔎", "Hauler")
@@ -121,6 +128,7 @@ hauler = F.SingleLinkField("Hauler 🔎", "app.models.Hauler.Hauler")
 ### 6. Celery Worker Configuration
 
 **Updated Configuration**:
+
 ```python
 celery = Celery(
     'worker',
@@ -136,12 +144,14 @@ celery = Celery(
 Created Railway-specific configuration files:
 
 **Procfile** (for process definitions):
+
 ```
 web: uvicorn src.app.main:app --host 0.0.0.0 --port $PORT
 worker: celery -A src.app.core.celery_worker worker --loglevel=info
 ```
 
 **railway.json** (Railway configuration):
+
 ```json
 {
   "$schema": "https://railway.app/railway.schema.json",
@@ -152,6 +162,7 @@ worker: celery -A src.app.core.celery_worker worker --loglevel=info
 ```
 
 **Additional Files Created**:
+
 - `railway-web.json` - Web service specific config
 - `railway-worker.json` - Worker service specific config
 - `start.sh` - Startup script with debugging
@@ -180,22 +191,30 @@ SQLALCHEMY_DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 
 # Security (generated via Fernet.generate_key())
-QBO_FERNET_KEY=N_F5_ZvCjypuhP1IT01X745KcqDGmD13OIWxkaQ2xzg=
+QBO_FERNET_KEY=your_fernet_key
 
 # Application Metadata
 APP_NAME=WR_API_CC
 APP_VERSION=1.0
 ```
 
+**Note:** To generate your fernet key you must use the following script:
+
+```
+python3 -c "from cryptography.fernet import Fernet; print('QBO_FERNET_KEY=' + Fernet.generate_key().decode())"
+```
+
 ### 9. Service Setup in Railway
 
 **Services Required**:
+
 1. **Web Service** - FastAPI application
-2. **Worker Service** - Celery background worker  
+2. **Worker Service** - Celery background worker
 3. **PostgreSQL** - Database for OAuth tokens
 4. **Redis** - Message broker for Celery
 
 **Service Configuration**:
+
 - Web Service: Uses `railway-web.json` config
 - Worker Service: Uses `railway-worker.json` config
 - Both services deploy from the same GitHub repository
@@ -203,7 +222,8 @@ APP_VERSION=1.0
 ### 10. Security Implementation
 
 **OAuth Token Encryption**:
-- Generated Fernet encryption key: `N_F5_ZvCjypuhP1IT01X745KcqDGmD13OIWxkaQ2xzg=`
+
+- Generated Fernet encryption key
 - All QuickBooks tokens encrypted at rest in PostgreSQL
 - Automatic token refresh with secure rotation
 
@@ -212,18 +232,19 @@ APP_VERSION=1.0
 **Issues Encountered and Resolved**:
 
 1. **Syntax Error in celery_worker.py**:
+
    - **Issue**: Accidentally mixed database code into Celery config
    - **Fix**: Removed extraneous code lines
-
 2. **Import Module Errors**:
+
    - **Issue**: Absolute imports failing in Railway environment
    - **Fix**: Systematic conversion to relative imports
-
 3. **Database Connection Issues**:
+
    - **Issue**: SQLite args used with PostgreSQL
    - **Fix**: Conditional connection arguments
-
 4. **Pydantic Validation Error**:
+
    - **Issue**: Empty `pdf_link` field failing URL validation
    - **Status**: Identified but not fixed (business logic decision needed)
 
@@ -231,7 +252,7 @@ APP_VERSION=1.0
 
 1. **Setup Railway Project**
 2. **Add PostgreSQL Database**
-3. **Add Redis Database**  
+3. **Add Redis Database**
 4. **Create Web Service from GitHub repo**
 5. **Create Worker Service from same GitHub repo**
 6. **Configure Environment Variables** (both services)
@@ -240,11 +261,13 @@ APP_VERSION=1.0
 ## Testing and Verification
 
 **Endpoints to Test**:
+
 - `GET /` - Health check
 - `GET /qbo/connect` - QuickBooks OAuth flow
 - `POST /bills/webhook` - Airtable webhook processing
 
 **Verification Steps**:
+
 1. Web service starts without import errors
 2. Worker service connects to Redis successfully
 3. Database tables created automatically
@@ -254,11 +277,13 @@ APP_VERSION=1.0
 ## Post-Deployment Configuration
 
 **QuickBooks Setup**:
+
 1. Update QuickBooks app redirect URI to Railway URL
 2. Test OAuth connection via `/qbo/connect`
 3. Verify token storage and refresh functionality
 
 **Airtable Setup**:
+
 1. Configure webhook to point to Railway web service
 2. Test webhook delivery with sample bill records
 3. Monitor Celery worker logs for processing success
@@ -266,12 +291,14 @@ APP_VERSION=1.0
 ## Monitoring and Logs
 
 **Railway provides built-in logging for**:
+
 - Application startup and errors
-- HTTP requests and responses  
+- HTTP requests and responses
 - Celery task execution
 - Database connection status
 
 **Key Log Locations**:
+
 - Web Service: Application and HTTP logs
 - Worker Service: Celery task execution logs
 - PostgreSQL: Connection and query logs
@@ -280,12 +307,14 @@ APP_VERSION=1.0
 ## Security Considerations
 
 **Implemented Security Measures**:
+
 - OAuth tokens encrypted at rest with Fernet
 - Environment variables for all sensitive data
 - HTTPS enforcement for OAuth redirects
 - Database credentials managed by Railway
 
 **Security Environment Variables**:
+
 - All tokens and secrets stored as Railway environment variables
 - No sensitive data committed to repository
 - Fernet key generated securely and stored separately
@@ -293,6 +322,7 @@ APP_VERSION=1.0
 ## Performance Optimization
 
 **Configuration Applied**:
+
 - Celery worker with retry logic for transient errors
 - Connection pooling for database operations
 - Redis for efficient message queueing
@@ -301,20 +331,24 @@ APP_VERSION=1.0
 ## Troubleshooting Common Issues
 
 **Import Errors**:
+
 - Ensure all imports are relative (`..module` not `app.module`)
 - Check `__init__.py` files exist in all directories
 
 **Database Connection Failures**:
+
 - Verify `SQLALCHEMY_DATABASE_URL` environment variable
 - Check PostgreSQL service is running
 - Ensure `psycopg2-binary` is in requirements.txt
 
 **Celery Worker Issues**:
+
 - Verify `REDIS_URL` environment variable
 - Check Redis service is running and accessible
 - Monitor worker logs for task execution status
 
 **QuickBooks OAuth Failures**:
+
 - Verify redirect URI matches Railway URL exactly
 - Check all QuickBooks environment variables are set
 - Ensure `QBO_FERNET_KEY` is properly generated and set
@@ -324,6 +358,7 @@ APP_VERSION=1.0
 The deployment process involved systematic fixes for Python import paths, database compatibility, dependency management, and service configuration. The application now runs successfully on Railway with proper error handling, security measures, and monitoring capabilities.
 
 The most critical fixes were:
+
 1. Converting absolute to relative imports
 2. Adding PostgreSQL driver support
 3. Fixing Airtable model cross-references

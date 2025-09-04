@@ -1,4 +1,5 @@
 #PROD
+#PROD
 SERVICE_TYPE_TO_QB_ACCOUNT = {
     "Trash": "122",  # Trash Removal (Exp.):Trash (Exp.) [COGS]
     "Roll off (move to tempo or monthly)": "142",  # Rolloff (Exp.) [COGS]

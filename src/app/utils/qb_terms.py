@@ -1,5 +1,5 @@
 # PROD
-TERMS_ID_ON_QB_PROD = {
+TERMS_ID_ON_QB = {
     5: "21",   # Net 5
     10: "12",  # Net 10
     15: "6",   # Net 15
@@ -11,7 +11,7 @@ TERMS_ID_ON_QB_PROD = {
     90: "13",  # Net 90
     120: "16", # Net 120
 }
-DEFAULT_TERM_ID_PROD = "7"  # Default term is Net 30
+DEFAULT_TERM_ID = "7"  # Default term is Net 30
 
 
 #DEV

@@ -5,7 +5,7 @@ from quickbooks.objects import Account
 from ..models.Bill import Bill as BillModel
 from ..schemas.Bill import BillBase as BillSchema, BillStatus
 from ..shared.quickbooks import get_qbo_client
-from ..utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT
+from ..utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT, DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
 from ..utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account
 from ..utils.qb_terms import TERMS_ID_ON_QB, DEFAULT_TERM_ID
 from ..database.engine import SessionLocal
@@ -66,7 +66,8 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         print(f"Customer found: {customer.DisplayName}")
         
         # 5) Get expense account
-        expense_account_id = SERVICE_TYPE_TO_QB_ACCOUNT.get(bill_schema.service_type) or DEFAULT_EXPENSE_ACCOUNT_ID
+        # expense_account_id = SERVICE_TYPE_TO_QB_ACCOUNT.get(bill_schema.service_type) or DEFAULT_EXPENSE_ACCOUNT_ID
+        expense_account_id = DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
         if not expense_account_id:
             raise BusinessValidationError(
                 f"No QuickBooks account mapping found for service type '{bill_schema.service_type}'",

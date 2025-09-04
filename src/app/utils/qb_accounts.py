@@ -11,6 +11,7 @@ SERVICE_TYPE_TO_QB_ACCOUNT = {
 
 # Fallback de seguridad por si falta mapeo o la cuenta está inválida
 DEFAULT_EXPENSE_ACCOUNT_ID = "47"  # Ask My Accountant (Other Expense)
+DEFAULT_TRASH_EXPENSE_ACCOUNT_ID = "122"  # # Trash Removal (Exp.):Trash (Exp.) [COGS]
 
 # #DEV
 # SERVICE_TYPE_TO_QB_ACCOUNT = {

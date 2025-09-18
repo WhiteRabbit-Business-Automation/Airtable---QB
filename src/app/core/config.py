@@ -20,4 +20,8 @@ QUICKBOOKS_ENV = os.environ["QUICKBOOKS_ENV"]
 
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL", "sqlite:///./attoqb.db")
 
+REDIS_URL = os.getenv("REDIS_URL", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+
 PORT = int(os.getenv("PORT", "8080"))

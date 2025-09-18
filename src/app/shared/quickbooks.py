@@ -15,8 +15,7 @@ from ..core.config import (
 from ..database.crud_qbo import get_decrypted_tokens, upsert_tokens
 from ..core.exceptions import BusinessValidationError
 
-redis_client = redis.Redis(host=REDIS_URL, port=REDIS_PORT, db=REDIS_DB)
-
+redis_client = redis.from_url(REDIS_URL, db = int(REDIS_DB) if REDIS_DB else 0, decode_responses=False)
 TOKEN_SAFETY_WINDOW_SECONDS = 5 * 60  # refresh 5 minutes before expiry
 UTC = dt.timezone.utc # all times in UTC
 

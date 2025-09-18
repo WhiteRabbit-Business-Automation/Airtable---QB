@@ -86,18 +86,18 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         print(f"Expense account found: {expense_account.Name}")
         #Comment on development
         #Location
-        location = get_department_from_service_account(qb, bill_schema.service_account)
-        if not location:
-            raise BusinessValidationError(
-                f"No department found for service account '{bill_schema.service_account}'",
-                payload={"service_account": bill_schema.service_account},
-            )
+        #location = get_department_from_service_account(qb, bill_schema.service_account)
+        # if not location:
+        #     raise BusinessValidationError(
+        #         f"No department found for service account '{bill_schema.service_account}'",
+        #         payload={"service_account": bill_schema.service_account},
+        #     )
         
         #Comment on development
         #terms
-        term = TERMS_ID_ON_QB.get(bill_schema.sales_term)
-        if not term:
-            term = DEFAULT_TERM_ID
+        # term = TERMS_ID_ON_QB.get(bill_schema.sales_term)
+        # if not term:
+        #     term = DEFAULT_TERM_ID
         
 
         # 6) Get QBO bill
@@ -107,9 +107,9 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         qbo_bill.TxnDate = bill_schema.bill_date.strftime("%Y-%m-%d") # Ensures format YYYY-MM-DD (in case that bill_date is datetime)
         qbo_bill.DueDate = bill_schema.due.strftime("%Y-%m-%d")
         qbo_bill.PrivateNote = f"{bill_schema.pdf_link}"
-        qbo_bill.DepartmentRef = {"value": location.Id} # Comment on dev
+        # qbo_bill.DepartmentRef = {"value": location.Id} # Comment on dev
         
-        qbo_bill.SalesTermRef = {"value": term}
+        # qbo_bill.SalesTermRef = {"value": term}
 
         qbo_bill.Line = [{
             "DetailType": "AccountBasedExpenseLineDetail",

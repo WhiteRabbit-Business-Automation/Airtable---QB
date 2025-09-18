@@ -1,7 +1,10 @@
 import datetime as dt
+import redis
 from sqlalchemy.orm import Session
 from intuitlib.client import AuthClient
 from quickbooks import QuickBooks
+from ..utils.lock import RedisLock
+from ..core.config import REDIS_URL, REDIS_PORT, REDIS_DB
 
 from ..core.config import (
     QUICKBOOKS_CLIENT_ID,
@@ -11,6 +14,8 @@ from ..core.config import (
 )
 from ..database.crud_qbo import get_decrypted_tokens, upsert_tokens
 from ..core.exceptions import BusinessValidationError
+
+redis_client = redis.Redis(host=REDIS_URL, port=REDIS_PORT, db=REDIS_DB)
 
 TOKEN_SAFETY_WINDOW_SECONDS = 5 * 60  # refresh 5 minutes before expiry
 UTC = dt.timezone.utc # all times in UTC
@@ -52,36 +57,56 @@ def needs_refresh(expires_at: dt.datetime | None) -> bool:
     return expires_in_seconds(expires_at) < TOKEN_SAFETY_WINDOW_SECONDS
 
 
+  
 def refresh_tokens(db: Session, auth_client: AuthClient, realm_id: str, refresh_token: str, env: str):
     """
     Refresh tokens with Intuit and persist the rotated refresh token.
     Intuit rotates the refresh token on every refresh.
     """
-    auth_client.refresh(refresh_token)
+    lock_key = f"lock:refresh_token:{realm_id}"  # Clave única para el lock
+    lock = RedisLock(redis_client, lock_key)
 
-    # Access token + expiry
-    access_token = auth_client.access_token
-    access_expires_in = getattr(auth_client, "expires_in", None) or getattr(auth_client, "access_token_expires_in", 3600)
-    access_expires_at = now_utc() + dt.timedelta(seconds=int(access_expires_in))
+    # Intentar obtener el lock
+    if lock.acquire():
+        try:
+            # Si el lock es adquirido, procede con el refresh de los tokens
+            print(f"Acquired lock for refreshing tokens for realm_id {realm_id}")
 
-    # New refresh token + expiry
-    new_refresh = auth_client.refresh_token
-    refresh_expires_in = getattr(auth_client, "x_refresh_token_expires_in", None) or getattr(auth_client, "refresh_token_expires_in", 100 * 24 * 3600)
-    new_refresh_expires_at = now_utc() + dt.timedelta(seconds=int(refresh_expires_in))
+            auth_client.refresh(refresh_token)
 
-    # Persist tokens
-    upsert_tokens(
-        db=db,
-        realm_id=realm_id,
-        environment=env,
-        access_token=access_token,
-        access_token_expires_at=access_expires_at,
-        refresh_token=new_refresh,
-        refresh_token_expires_at=new_refresh_expires_at,
-        scopes="accounting",
-    )
+            # Access token + expiry
+            access_token = auth_client.access_token
+            access_expires_in = getattr(auth_client, "expires_in", None) or getattr(auth_client, "access_token_expires_in", 3600)
+            access_expires_at = now_utc() + dt.timedelta(seconds=int(access_expires_in))
 
-    return access_token, access_expires_at, new_refresh, new_refresh_expires_at
+            # New refresh token + expiry
+            new_refresh = auth_client.refresh_token
+            refresh_expires_in = getattr(auth_client, "x_refresh_token_expires_in", None) or getattr(auth_client, "refresh_token_expires_in", 100 * 24 * 3600)
+            new_refresh_expires_at = now_utc() + dt.timedelta(seconds=int(refresh_expires_in))
+
+            # Persist tokens
+            upsert_tokens(
+                db=db,
+                realm_id=realm_id,
+                environment=env,
+                access_token=access_token,
+                access_token_expires_at=access_expires_at,
+                refresh_token=new_refresh,
+                refresh_token_expires_at=new_refresh_expires_at,
+                scopes="accounting",
+            )
+
+            print(f"Tokens refreshed successfully for realm_id {realm_id}")
+
+            return access_token, access_expires_at, new_refresh, new_refresh_expires_at
+        finally:
+            # Siempre libera el lock al final del proceso
+            lock.release()
+            print(f"Released lock for refreshing tokens for realm_id {realm_id}")
+    else:
+        # Si no se pudo adquirir el lock, espera o aborta
+        print(f"Lock already acquired for realm_id {realm_id}. Skipping token refresh.")
+        return None
 
 
 def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
@@ -103,14 +128,22 @@ def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
     if needs_refresh(record["access_token_expires_at"]) or not record["access_token"]:
         if not record["refresh_token"]:
             raise BusinessValidationError("Missing refresh token. Reconnect QuickBooks at /qbo/connect")
-        # refresh and persist new tokens
-        refresh_tokens(
-            db=db,
-            auth_client=auth_client,
-            realm_id=realm_id,
-            refresh_token=record["refresh_token"],
-            env=env,
-        )
+
+        # Asegúrate de que no se refresquen los tokens simultáneamente
+        lock_key = f"lock:refresh_token:{realm_id}"
+        lock = RedisLock(redis_client, lock_key)
+
+        if lock.acquire():
+            try:
+                # Si el lock se adquiere, refresca los tokens
+                refresh_tokens(db, auth_client, realm_id, record["refresh_token"], env)
+            finally:
+                # Libera el lock después de refrescar los tokens
+                lock.release()
+        else:
+            # Si ya hay otro proceso refrescando los tokens, simplemente usa los tokens existentes
+            print(f"Lock already acquired for token refresh for realm_id {realm_id}. Using existing tokens.")
+
     else:
         # reuse current tokens
         auth_client.access_token = record["access_token"]
@@ -124,3 +157,4 @@ def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
         sandbox=(env == "sandbox"),
     )
     return qb
+

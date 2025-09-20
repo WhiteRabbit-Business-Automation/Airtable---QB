@@ -3,6 +3,7 @@ import redis
 from sqlalchemy.orm import Session
 from intuitlib.client import AuthClient
 from quickbooks import QuickBooks
+import time
 from ..utils.lock import RedisLock
 from ..core.config import REDIS_URL, REDIS_PORT, REDIS_DB
 
@@ -57,20 +58,24 @@ def needs_refresh(expires_at: dt.datetime | None) -> bool:
 
 
   
+
 def refresh_tokens(db: Session, auth_client: AuthClient, realm_id: str, refresh_token: str, env: str):
     """
     Refresh tokens with Intuit and persist the rotated refresh token.
     Intuit rotates the refresh token on every refresh.
+    Uses a Redis lock to prevent concurrent refreshes.
     """
-    lock_key = f"lock:refresh_token:{realm_id}"  # Clave única para el lock
-    lock = RedisLock(redis_client, lock_key)
+    lock_key = f"lock:refresh_token:{realm_id}"
+    lock = RedisLock(redis_client, lock_key, ttl=10)  # TTL 10s para evitar locks pegados
 
-    # Intentar obtener el lock
     if lock.acquire():
         try:
-            # Si el lock es adquirido, procede con el refresh de los tokens
             print(f"Acquired lock for refreshing tokens for realm_id {realm_id}")
 
+            if not refresh_token:
+                raise ValueError("No refresh token provided")
+
+            # Refresh the tokens with QuickBooks
             auth_client.refresh(refresh_token)
 
             # Access token + expiry
@@ -78,12 +83,12 @@ def refresh_tokens(db: Session, auth_client: AuthClient, realm_id: str, refresh_
             access_expires_in = getattr(auth_client, "expires_in", None) or getattr(auth_client, "access_token_expires_in", 3600)
             access_expires_at = now_utc() + dt.timedelta(seconds=int(access_expires_in))
 
-            # New refresh token + expiry
+            # Refresh token + expiry
             new_refresh = auth_client.refresh_token
             refresh_expires_in = getattr(auth_client, "x_refresh_token_expires_in", None) or getattr(auth_client, "refresh_token_expires_in", 100 * 24 * 3600)
             new_refresh_expires_at = now_utc() + dt.timedelta(seconds=int(refresh_expires_in))
 
-            # Persist tokens
+            # Persist tokens in DB
             upsert_tokens(
                 db=db,
                 realm_id=realm_id,
@@ -96,16 +101,26 @@ def refresh_tokens(db: Session, auth_client: AuthClient, realm_id: str, refresh_
             )
 
             print(f"Tokens refreshed successfully for realm_id {realm_id}")
-
             return access_token, access_expires_at, new_refresh, new_refresh_expires_at
         finally:
-            # Siempre libera el lock al final del proceso
             lock.release()
             print(f"Released lock for refreshing tokens for realm_id {realm_id}")
     else:
-        # Si no se pudo adquirir el lock, espera o aborta
-        print(f"Lock already acquired for realm_id {realm_id}. Skipping token refresh.")
-        return None
+        # Lock ocupado: espera a que el otro worker termine y lea los tokens de DB
+        print(f"Lock already acquired for realm_id {realm_id}. Waiting for tokens...")
+        timeout = 5  # segundos
+        start = time.time()
+        while time.time() - start < timeout:
+            record = get_decrypted_tokens(db, realm_id)
+            if record and record.get("refresh_token"):
+                return (
+                    record.get("access_token"),
+                    record.get("access_token_expires_at"),
+                    record.get("refresh_token"),
+                    record.get("refresh_token_expires_at")
+                )
+            time.sleep(0.5)
+        raise ValueError("Refresh token not available after waiting for lock release")
 
 
 def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
@@ -117,38 +132,30 @@ def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
     if not record:
         raise BusinessValidationError("QuickBooks is not connected yet. Go to /qbo/connect")
 
-    # normalize DB datetimes to avoid naive/aware subtraction errors
-    record["access_token_expires_at"]  = ensure_aware(record["access_token_expires_at"])
+    # Normalize datetimes
+    record["access_token_expires_at"] = ensure_aware(record["access_token_expires_at"])
     record["refresh_token_expires_at"] = ensure_aware(record["refresh_token_expires_at"])
 
-    env = record["environment"] or QUICKBOOKS_ENV
+    env = record.get("environment") or QUICKBOOKS_ENV
     auth_client = get_auth_client()
 
+    # Si el access token está expirado o no existe
     if needs_refresh(record["access_token_expires_at"]) or not record["access_token"]:
-        if not record["refresh_token"]:
+        if not record.get("refresh_token"):
             raise BusinessValidationError("Missing refresh token. Reconnect QuickBooks at /qbo/connect")
 
-        # Asegúrate de que no se refresquen los tokens simultáneamente
-        lock_key = f"lock:refresh_token:{realm_id}"
-        lock = RedisLock(redis_client, lock_key)
-
-        if lock.acquire():
-            try:
-                # Si el lock se adquiere, refresca los tokens
-                refresh_tokens(db, auth_client, realm_id, record["refresh_token"], env)
-            finally:
-                # Libera el lock después de refrescar los tokens
-                lock.release()
-        else:
-            # Si ya hay otro proceso refrescando los tokens, simplemente usa los tokens existentes
-            print(f"Lock already acquired for token refresh for realm_id {realm_id}. Using existing tokens.")
-
+        # Refresca tokens usando lock
+        access_token, access_expires_at, refresh_token, refresh_expires_at = refresh_tokens(
+            db, auth_client, realm_id, record["refresh_token"], env
+        )
+        auth_client.access_token = access_token
+        auth_client.refresh_token = refresh_token
     else:
-        # reuse current tokens
+        # Reusa tokens existentes
         auth_client.access_token = record["access_token"]
         auth_client.refresh_token = record["refresh_token"]
 
-    # IMPORTANT: QuickBooks ctor wants company_id, not realm_id
+    # Construye cliente QuickBooks
     qb = QuickBooks(
         auth_client=auth_client,
         company_id=realm_id,
@@ -156,4 +163,3 @@ def get_qbo_client(realm_id: str, db: Session) -> QuickBooks:
         sandbox=(env == "sandbox"),
     )
     return qb
-

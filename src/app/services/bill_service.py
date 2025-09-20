@@ -5,8 +5,8 @@ from quickbooks.objects import Account
 from ..models.Bill import Bill as BillModel
 from ..schemas.Bill import BillBase as BillSchema, BillStatus
 from ..shared.quickbooks import get_qbo_client
-from ..utils.qb_accounts import DEFAULT_EXPENSE_ACCOUNT_ID, SERVICE_TYPE_TO_QB_ACCOUNT, DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
-from ..utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account
+from ..utils.qb_accounts import  SERVICE_TYPE_TO_QB_ACCOUNT, DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
+from ..utils.quickbooks import _get_customer_by_display_name, _get_default_company_id, _get_vendor, get_department_from_service_account, check_duplicate_bill_number
 from ..utils.qb_terms import TERMS_ID_ON_QB, DEFAULT_TERM_ID
 from ..database.engine import SessionLocal
 from ..core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
@@ -66,8 +66,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         print(f"Customer found: {customer.DisplayName}")
         
         # 5) Get expense account
-        # expense_account_id = SERVICE_TYPE_TO_QB_ACCOUNT.get(bill_schema.service_type) or DEFAULT_EXPENSE_ACCOUNT_ID
-        expense_account_id = DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
+        expense_account_id = SERVICE_TYPE_TO_QB_ACCOUNT.get(bill_schema.service_type) or DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
         if not expense_account_id:
             raise BusinessValidationError(
                 f"No QuickBooks account mapping found for service type '{bill_schema.service_type}'",
@@ -94,6 +93,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
                 payload={"service_account": bill_schema.service_account},
             )
         
+        #Comment on development
         #terms
         term = TERMS_ID_ON_QB.get(bill_schema.sales_term)
         if not term:
@@ -123,8 +123,11 @@ async def bill_service(bill_id: str, company_id: str | None = None):
 
         # 7) Save to QBO
         try:
-            qbo_bill.save(qb=qb)
-            print(f"Bill {bill.bill_number} created in QBO with Id {qbo_bill.Id}")
+            if check_duplicate_bill_number(qb, bill_schema.bill_number):
+              print(f"Bill with number {bill_schema.bill_number} already exists in QuickBooks. Skipping creation.")
+            else:
+              qbo_bill.save(qb=qb)
+              print(f"Bill {bill_schema.bill_number} created in QBO with Id {qbo_bill.Id}")
         except Exception as e:
             msg = str(e)
             # simple heuristic
@@ -151,7 +154,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
             bill.status = "Issue sending to QB"
             bill.status_detail = f"500: {e}"
             bill.save()
-        # Deja que el worker decida reintentar
+        # Let the worker retry
         raise
     else:
         bill.status_detail = ""

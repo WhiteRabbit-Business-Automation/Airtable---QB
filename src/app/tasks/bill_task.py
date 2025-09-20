@@ -2,7 +2,7 @@ from ..core.celery_worker import celery
 from ..services.bill_service import bill_service
 from ..core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
 
-@celery.task(bind=True, max_retries=3, default_retry_delay=180)
+@celery.task(name='app.task.bill_task.process_bill_task', bind=True, max_retries=3, default_retry_delay=10)
 def process_bill_task(self, bill_id: str, company_id: str | None = None):
     import asyncio
     try:

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from quickbooks.objects.bill import Bill as QbBill
 from quickbooks.objects import Account
 from ..models.Bill import Bill as BillModel
+from ..models.PDFLog import PDFLog
 from ..schemas.Bill import BillBase as BillSchema, BillStatus
 from ..shared.quickbooks import get_qbo_client
 from ..utils.qb_accounts import  SERVICE_TYPE_TO_QB_ACCOUNT, DEFAULT_TRASH_EXPENSE_ACCOUNT_ID
@@ -10,7 +11,8 @@ from ..utils.quickbooks import _get_customer_by_display_name, _get_default_compa
 from ..utils.qb_terms import TERMS_ID_ON_QB, DEFAULT_TERM_ID
 from ..database.engine import SessionLocal
 from ..core.exceptions import BusinessValidationError, NotFoundDomainError, RetryableSystemError
-
+from ..utils.status_detail import StatusDetail
+import datetime
 
 async def bill_service(bill_id: str, company_id: str | None = None):
     db: Session | None = None
@@ -25,6 +27,10 @@ async def bill_service(bill_id: str, company_id: str | None = None):
             print(f"Processing bill {bill.bill_number} with status {bill.status}")
         except Exception as e:
             raise NotFoundDomainError(f"Bill with id {bill_id} not found: {e}")
+          
+        if bill.bill_amount is None:
+          raise BusinessValidationError(
+              "Bill amount is missing")
 
         # 2) Build schema
         bill_schema = BillSchema(
@@ -138,25 +144,119 @@ async def bill_service(bill_id: str, company_id: str | None = None):
     except ValidationError as e:
         if bill:
             bill.status = "Issue sending to QB"
-            bill.status_detail = f"400: ValidationError | {e.json()}"
+            detail = StatusDetail(
+                logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                file_link=bill.pdf_link,
+                status="Validation Error",
+                detail=f"There was a problem sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+                actions=[
+                    "Review the bill details in AirTable for any inconsistencies.",
+                    "Ensure all required fields are correctly filled.",
+                    "If the error persists, contact your system administrator."
+                ]
+            )
+            bill.status_detail = str(detail)
+            #bill.status_detail = f"400: ValidationError | {e}"
+            
+            logged_pdf = PDFLog(
+              name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+              pdf_file = bill.pdf_link,
+              status = ["Record is missing required values"],
+              details = f"There was a problem sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+              tech_details = str(e),
+            )
+            logged_pdf.save()
             bill.save()
         raise BusinessValidationError("Pydantic validation error", payload={"errors": e.errors()})
 
     except (BusinessValidationError, NotFoundDomainError, RetryableSystemError) as e:
         if bill:
             bill.status = "Issue sending to QB"
-            bill.status_detail = e.to_airtable_detail()
+            if isinstance(e, BusinessValidationError) and e.payload and "errors" in e.payload:
+                detail = StatusDetail(
+                    logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    file_link=bill.pdf_link,
+                    status="Error with Bill Data",
+                    detail=f"There was a problem sending the bill to QuickBooks",
+                    actions=[
+                        "Review the bill details in AirTable for any inconsistencies.",
+                        "Ensure all required fields are correctly filled.",
+                        "Verify the Hauler and Customer exist in QuickBooks.",
+                        "If the error persists, contact your system administrator."
+                    ]
+                )
+                bill.status_detail = str(detail)
+
+                logged_pdf = PDFLog(
+                    name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+                    pdf_file=bill.pdf_link,
+                    status=["Record is missing required values"],
+                    details=f"There was a problem sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+                    tech_details=str(e),
+                )
+                logged_pdf.save()
+            else:
+                detail = StatusDetail(
+                    logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    file_link=bill.pdf_link,
+                    status="Error with AirTable to QuickBooks Workflow",
+                    detail=f"There was a problem sending the bill to QuickBooks",
+                    actions=[
+                        "Try resending the bill after some time.",
+                        "If the error persists, contact your system administrator."
+                    ]
+                )
+                bill.status_detail = str(detail)
+                
+                logged_pdf = PDFLog(
+                    name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+                    pdf_file=bill.pdf_link,
+                    status=["Workflow error"] ,
+                    details=f"There was a problem sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+                    tech_details=str(e),
+                )
+                logged_pdf.save()
+            #bill.status_detail = e.to_airtable_detail()
             bill.save()
         raise
 
     except Exception as e:
         if bill:
             bill.status = "Issue sending to QB"
-            bill.status_detail = f"500: {e}"
+            detail = StatusDetail(
+                logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                file_link=bill.pdf_link,
+                status="Error sending to QuickBooks",
+                detail=f"There was an unexpected error sending the bill to QuickBooks.",
+                actions=[
+                    "Try resending the bill after some time.",
+                    "If the error persists, contact your system administrator."
+                ]
+            )
+            bill.status_detail = str(detail)
+            logged_pdf = PDFLog(
+                name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+                pdf_file=bill.pdf_link,
+                status=["Workflow error"],
+                details=f"There was an unexpected error sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+                tech_details=str(e),
+            )
+            logged_pdf.save()
+            # bill.status_detail = f"500: {e}"
             bill.save()
+            
         # Let the worker retry
         raise
     else:
         bill.status_detail = ""
         bill.status = BillStatus.BILL_IN_QB.value
+        
+        logged_pdf = PDFLog(
+            name=f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+            pdf_file=bill.pdf_link,
+            status=["Bill in QB"],
+            details=f"The bill {bill.bill_number} was successfully sent to QuickBooks.",
+            tech_details="",
+        )
+        logged_pdf.save()
         bill.save()

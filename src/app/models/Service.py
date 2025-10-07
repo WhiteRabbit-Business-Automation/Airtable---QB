@@ -23,6 +23,7 @@ class Service(Model):
   account_number = F.LookupField[str]("A# 🔎")
   parent_account = F.LookupField[str]("Parent Account 🔎")
   duplicate_delete = F.CheckboxField("Duplicate (delete)")
+  service_account_normalized = F.TextField("Service Acc # normalized")
   
   class Meta:
       base_id = AIRTABLE_BASE_ID

@@ -5,7 +5,7 @@ class Bill(Model):
   bill_number = F.TextField("Bill #")
   status = F.SelectField("Status")
   pdf_file = F.AttachmentsField("PDF file")
-  pdf_link = F.TextField("PDF Link")
+  pdf_link = F.UrlField("PDF Link")
   bill_date = F.DateField("Bill date")
   due = F.TextField("Due")
   service = F.SingleLinkField("Service 🔎", "app.models.Service.Service")
@@ -30,6 +30,8 @@ class Bill(Model):
   parent_account = F.LookupField[str]("Parent Account 🔎")
   status_service = F.LookupField[str]("Status (from Service) 🔎")
   status_detail = F.TextField("Status detail")
+  service_account_normalized = F.LookupField[str]("Service Account 🔎 normalized")
+  last_modified = F.LastModifiedTimeField("Last Modified Time")
   
   class Meta:
     base_id = AIRTABLE_BASE_ID

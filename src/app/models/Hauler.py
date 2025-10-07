@@ -13,7 +13,7 @@ class Hauler(Model):
   name_lower_case = F.TextField("Name Lower case", readonly=True)
   hauler_ai_instruction = F.MultilineTextField("Hauler AI Instruction", readonly=True)
   instruction_notes = F.TextField("Instruction Notes", readonly=True)
-  hauler_number = F.NumberField("H#")
+  hauler_number = F.TextField("H#")
 
 
   class Meta:

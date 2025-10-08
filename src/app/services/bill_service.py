@@ -222,6 +222,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
                     status=["Workflow error"] ,
                     details=f"There was a problem sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
                     tech_details=str(e),
+                    action=["Wait 3 minutes and change the status to 'Done' and then to 'Send to QB' to try again"]
                 )
                 logged_pdf.save()
             #bill.status_detail = e.to_airtable_detail()
@@ -248,6 +249,7 @@ async def bill_service(bill_id: str, company_id: str | None = None):
               status=["Workflow error"],
               details=f"There was an unexpected error sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
               tech_details=str(e),
+              action=["Wait 3 minutes and change the status to 'Done' and then to 'Send to QB' to try again"]
           )
           logged_pdf.save()
           # bill.status_detail = f"500: {e}"

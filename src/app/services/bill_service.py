@@ -131,6 +131,14 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         try:
             if check_duplicate_bill_number(qb, bill_schema.bill_number):
               print(f"Bill with number {bill_schema.bill_number} already exists in QuickBooks. Skipping creation.")
+              logged_pdf = PDFLog(
+                name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+                pdf_file = bill.pdf_link,
+                status = ["Bill already exists in QuickBooks"],
+                details = f"Bill with number {bill_schema.bill_number} already exists in QuickBooks. Skipping creation.",
+                tech_details = f"Bill with number {bill_schema.bill_number} already exists in QuickBooks. Skipping creation.",
+              )
+              logged_pdf.save()
             else:
               qbo_bill.save(qb=qb)
               print(f"Bill {bill_schema.bill_number} created in QBO with Id {qbo_bill.Id}")
@@ -221,32 +229,32 @@ async def bill_service(bill_id: str, company_id: str | None = None):
         raise
 
     except Exception as e:
-        if bill:
-            bill.status = "Issue sending to QB"
-            detail = StatusDetail(
-                logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                file_link=bill.pdf_link,
-                status="Error sending to QuickBooks",
-                detail=f"There was an unexpected error sending the bill to QuickBooks.",
-                actions=[
-                    "Try resending the bill after some time.",
-                    "If the error persists, contact your system administrator."
-                ]
-            )
-            bill.status_detail = str(detail)
-            logged_pdf = PDFLog(
-                name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
-                pdf_file=bill.pdf_link,
-                status=["Workflow error"],
-                details=f"There was an unexpected error sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
-                tech_details=str(e),
-            )
-            logged_pdf.save()
-            # bill.status_detail = f"500: {e}"
-            bill.save()
-            
-        # Let the worker retry
-        raise
+      if bill:
+          bill.status = "Issue sending to QB"
+          detail = StatusDetail(
+              logg_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+              file_link=bill.pdf_link,
+              status="Error sending to QuickBooks",
+              detail=f"There was an unexpected error sending the bill to QuickBooks.",
+              actions=[
+                  "Try resending the bill after some time.",
+                  "If the error persists, contact your system administrator."
+              ]
+          )
+          bill.status_detail = str(detail)
+          logged_pdf = PDFLog(
+              name = f"{bill.hauler.name} - {bill.bill_number} - {bill.service.service_account_number}" if bill.hauler and bill.service else f"{bill.bill_number}",
+              pdf_file=bill.pdf_link,
+              status=["Workflow error"],
+              details=f"There was an unexpected error sending the bill {bill.bill_number} to QuickBooks. Errors: {e}",
+              tech_details=str(e),
+          )
+          logged_pdf.save()
+          # bill.status_detail = f"500: {e}"
+          bill.save()
+          
+      # Let the worker retry
+      raise
     else:
         bill.status_detail = ""
         bill.status = BillStatus.BILL_IN_QB.value
